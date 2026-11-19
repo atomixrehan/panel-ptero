@@ -1,1 +1,130 @@
-# panel-ptero
+# ⛏️ Minecraft Panel Bot
+
+A Discord bot that replaces a hosting panel: start/stop button panel, remote console, plugin manager,
+settings editor, backups, world upload, auto-shutdown – plus **DiscordSRV** for cross-chat.
+Runs **Paper**; Java is downloaded automatically (right version for your Minecraft version).
+
+## Install / update / reinstall
+
+```bash
+git clone https://github.com/<you>/minecraft-panel-bot.git
+cd minecraft-panel-bot
+chmod +x *.sh
+./setup.sh
+```
+
+**Fresh machine:** installs everything, runs the wizard, then asks how to start the bot (terminal / background / not now). **systemd is never touched unless you ask for it** (see below).
+
+### Updating (your data is never touched)
+```bash
+./setup.sh --update        # (or run ./setup.sh and pick 1)
+```
+Updates **only the bot code, scripts and Python dependencies**. Your `config.json`, `server/` (world, plugins, server.properties), `data/`, `backups/` and the downloaded Java stay **byte-for-byte identical** – they are all git-ignored.
+What it does, in order: safety copy `config.json.bak` → stops the bot and Minecraft server gracefully (world saved) → fetches the new code → continues with the **new** `setup.sh` → refreshes dependencies → **checks that the new code loads, and rolls back to the previous version automatically if it doesn't** → restarts the bot (and starts the Minecraft server again if it was running before).
+
+It copes with the usual git problems by itself: `chmod +x` on the scripts (never counts as a local change), folders owned by another user ("dubious ownership"), clones without an upstream branch, a force-pushed remote, and local edits to code files (a copy is saved to `logs/local-changes-*.patch` and a `backup-before-update-*` branch, then the new code is applied). If it can't reach the remote it says so plainly and changes nothing.
+**No git** (folder came from a ZIP)? Unzip the new version over the old folder – your config/world aren't in the ZIP – then run `./setup.sh --update`. Or give it your GitHub URL when it asks, and later updates are automatic.
+
+Want the newest Paper build and plugins too? That is a separate, optional step because it changes files inside `server/`:
+`./setup.sh --update --with-server` (or answer *y* when asked). Plugins can also be updated from Discord with `/plugin → Update all`, the Minecraft version with `/version`.
+
+Running `./setup.sh` on an existing install shows a menu: **1) Update** · **2) Clean reinstall** (type `DELETE`; wipes everything and starts over) · **3) Cancel**.
+
+### Running it: terminal, background, or systemd (optional)
+| | |
+|---|---|
+| `./start.sh` | run in this terminal (Ctrl+C stops it) |
+| `./start.sh --setup` | **menu to change ONE setting** (token, role/channels, RAM, version, plugins, server name/MOTD, max players, auto-shutdown/auto-start, EULA). Run it while the bot is stopped |
+| `./start.sh --install` | finish/repair the server download, **no questions** (the bot also does this by itself when you press Start) |
+| `./start.sh --bg` | run in the **background**, survives closing the terminal. Logs: `tail -f logs/bot.log` |
+| `./stop.sh` | stop the bot **and** the Minecraft server safely (world is saved first) |
+| `./setup.sh --service` | *optional:* install a systemd service (auto-start on boot). Never done automatically |
+| `./setup.sh --remove-service` | remove that service again |
+
+Only one bot can run per folder (a lock prevents duplicates).
+
+**`./start.sh` never asks questions once the bot is configured.** The first-time questions are asked once; every answer is saved immediately, so if you stop half-way the next run **continues with only the unanswered ones**. If a download failed during setup (no internet, API hiccup), nothing has to be re-entered: pressing **Start** finishes the installation by itself, or run `./start.sh --install`.
+
+## 🦖 Running inside Pterodactyl (admin dashboard)
+
+Pterodactyl then runs **one** server: this bot, which launches Minecraft inside the same container. Pterodactyl's console, file manager, schedules and power buttons manage everything; Discord keeps the player-facing parts (panel with Start button, cross-chat, console channel).
+
+1. **Import the egg:** Admin → Nests → Import Egg → `pterodactyl/egg-minecraft-discord-panel.json` (edit `REPO_URL` to your GitHub repo).
+2. **Create a server** with that egg. Memory limit = Minecraft + about 220 MB for the bot (e.g. 4096 MB limit → ~3.3 GB Java heap, sized automatically). Use the **primary allocation's port for both Java (TCP) and Bedrock (UDP)** – Pterodactyl publishes both, and the bot points Geyser at it.
+3. **Startup tab:** fill in the Discord token, role and channel IDs, set `EULA=true`. Start the server. The first start downloads Java, Paper and the plugins by itself (watch the console). No wizard, no `setup.sh`.
+4. **Change anything later in the Startup tab** (MOTD, max players, auto-shutdown, plugins, version…) and restart: the variables are applied on every start. Raising `MC_VERSION` backs up the world and upgrades; it never downgrades by itself.
+
+How it fits together
+* Pterodactyl's console shows Minecraft's output, and what you type there goes to Minecraft (`!start`, `!stop`, `!restart` control Minecraft itself; Pterodactyl's **Stop** button saves the world and exits cleanly).
+* **Panel + cross-chat are always on.** `COMMANDS=full|minimal|off` only trims the Discord slash commands. They cost no measurable RAM; use `minimal` or `off` if you'd rather admins do everything in Pterodactyl.
+* **Auto-start on join** holds the Minecraft port while Minecraft is offline, so it defaults to `false` here: with it on, starting Minecraft from elsewhere while the bot listens would clash. The Pterodactyl power button always works because it starts the bot, which releases the port itself.
+* Disk: `/backup` zips land in the server's own disk quota; Pterodactyl's Backups tab is the better tool for scheduled backups.
+* The egg is written to the documented egg format but has **not been tested on a live panel** – if the import complains, tell me the message.
+
+### Memory the bot itself uses
+About **48 MB** at rest after startup (Python 20 MB + discord.py 22 MB + this code 6 MB), plus a few MB once connected. The slash commands add ~0; the caches for messages and members are switched off.
+
+## ☠️ Kill / uninstall – leave the machine clean
+
+```bash
+./kill.sh
+```
+
+Stops the systemd service, the bot **and** the Minecraft server of this folder (gracefully, then force), deletes the panel message in Discord,
+removes the service file, and deletes everything that was installed: `server/` (world, plugins), `runtime/` (Java), `.venv/`, `data/`, `config.json` (your token).
+It asks (default **No**) before also deleting `backups/`, the source folder itself, and the system packages `setup.sh` installed
+(only packages that were *not* there before – `setup.sh` records them in `.install_state`).
+
+```bash
+./kill.sh --yes             # no questions; keeps backups, source and system packages
+./kill.sh --yes --purge     # no questions; ALSO deletes backups and this whole folder
+./kill.sh --yes --packages  # also removes the system packages setup.sh installed
+```
+
+It only touches processes whose working directory is inside this folder, so other Python/Java programs on the machine are safe.
+
+### Discord bot setup (once)
+1. https://discord.com/developers/applications → New Application → **Bot** → copy token.
+2. Bot tab → enable **Message Content Intent** and **Server Members Intent** (DiscordSRV needs both).
+3. Invite with scopes `bot` + `applications.commands`; permissions: View Channels, Send Messages, Embed Links, Read Message History, Add Reactions, **Manage Webhooks** (player-head chat messages).
+4. Create an OP role and 4 channels: `#panel`, `#cross-chat`, `#console`, `#configure` (hide console/configure from non-OPs).
+
+### Setup questions (asked once)
+Bot token · OP role ID · Panel / Cross-chat / Console / Configure channel IDs · EULA · RAM · version ·
+server name (MOTD) · max players · auto-shutdown (on/off + idle minutes) · auto-start on join · plugins: **Install recommended** (Geyser, Floodgate, ViaVersion, ViaBackwards, ViaRewind, SkinsRestorer, spark) / **Custom** / **None**.
+**DiscordSRV is always installed** and auto-configured (same token, cross-chat channel, webhook chat with player heads).
+
+## Channels
+| Channel | What it does |
+|---|---|
+| Panel | **One** message that is only ever edited (never re-posted; duplicates from older runs are removed at start). Status, player count, version, uptime (coarse: *Just now, 1 min, 2 mins, 1 hr…*). Updates only when something visibly changes. **Start** = everyone, **Stop / Restart** = OP role. Buttons react instantly – the panel switches to *Starting… / Stopping…* with a hint line, no extra chat messages. |
+| Cross-chat | Handled by **DiscordSRV**: chat both ways, join/leave, advancements, deaths, start/stop messages. Customise in `server/plugins/DiscordSRV/`. |
+| Console | Live server log. OP messages are run as console commands. |
+| Configure | All slash commands (OP only, only usable here). |
+
+## Slash commands (configure channel)
+Type **`/help`** for an interactive guide (works anywhere). If commands don't show up: press **Ctrl+R**, or mention the bot with `@bot sync`
+(`@bot invite` prints the invite link). The invite link is also printed in the log at every start and by the wizard –
+the bot **must** be invited with the `applications.commands` scope. Make sure the bot's role can **view** all four channels, and has **Read Message History** in the panel channel (so it can always find its one panel message).
+
+`/server` start·stop·restart·kill · `/autoshut` · `/autostart` (wake the server when someone tries to join) · `/autorestart` · `/plugin` (search/install/remove/update all) · `/plugin_upload` ·
+`/settings` (server properties + game rules) · `/motd` (server-list text, `&a` colours, `\n` 2nd line) · `/icon` (server-list picture, auto 64×64) ·
+`/ram` · `/version` (change Minecraft version, auto-backup) · `/world upload` (replace world from .zip attachment or direct link) · `/world reset` ·
+`/backup create|list|restore|delete|schedule` · `/players` · `/whitelist` · `/op` `/deop` `/kick` `/ban` `/pardon` · `/command`
+
+## Auto-shutdown (`/autoshut`)
+Stops the server only after **no players for the set time (default 3 min)**. It never trusts the console log alone: besides the join/leave lines it asks the server itself (status ping + `list`), and **it will not stop unless the server confirms zero players** – if it can't verify, it keeps the server running and re-checks.
+
+## Auto-start on join (Java **and** Bedrock)
+While the server is offline the bot listens on the Minecraft ports (TCP 25565, and UDP 19132 when Geyser is installed).
+* **Java:** the server list shows your MOTD + "Offline – join to start the server!". A real join attempt shows "starting, reconnect in a minute" and boots the server. With the whitelist on, only whitelisted names can wake it.
+* **Bedrock:** the server appears in the Bedrock server list as offline; tapping join starts the server. Retry after about a minute. (After the server has been online once, the bot remembers Geyser's real version info so the offline entry matches exactly.)
+* Pings never start the server. Toggle with `/autostart`. Combined with `/autoshut` the server sleeps when empty and wakes when someone knocks.
+
+## Notes
+- Open **TCP 25565** (Java) and **UDP 19132** (Bedrock/Geyser) on your firewall/host.
+- `config.json` holds your token and is git-ignored – never commit it. `server/`, `backups/`, `runtime/`, `data/` are ignored too.
+- MOTD / icon / most properties apply after a restart. Game rules apply live and on every start.
+- `/world upload` accepts a zip containing the world folder (the folder with `level.dat`, zipped alone or inside a folder). Bukkit-style `_nether` / `_the_end` folders are picked up too.
+- Bedrock whitelist: `/whitelist add player:.Name`. Windows: use WSL2.
+- `./kill.sh` removes everything (see above), including `logs/`.

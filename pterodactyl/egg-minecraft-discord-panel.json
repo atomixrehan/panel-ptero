@@ -1,0 +1,212 @@
+{
+  "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2026-11-20T00:00:00+00:00",
+  "name": "Minecraft Discord Panel",
+  "author": "admin@example.com",
+  "description": "Paper Minecraft server (Java + optional Bedrock via Geyser) run by the Discord panel bot: Discord start/stop panel, DiscordSRV cross-chat, console channel, auto-shutdown and auto-start on join. Everything is configured from the Startup tab.",
+  "features": null,
+  "docker_images": {
+    "Python 3.12": "ghcr.io/parkervcp/yolks:python_3.12"
+  },
+  "file_denylist": [],
+  "startup": "export PYTHONUSERBASE=/home/container/.local PATH=/home/container/.local/bin:$PATH; if [ \"{{AUTO_UPDATE}}\" = \"1\" ] && [ -d .git ]; then git pull --ff-only || true; fi; pip install -q --user --upgrade -r requirements.txt; python -m panel",
+  "config": {
+    "files": "{}",
+    "startup": "{\"done\": \"Logged in as\"}",
+    "logs": "{}",
+    "stop": "^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/ash\napk add --no-cache git >/dev/null 2>&1\nmkdir -p /mnt/server && cd /mnt/server\nif [ ! -d .git ]; then\n  git clone --depth 1 --branch \"${REPO_BRANCH}\" \"${REPO_URL}\" /tmp/src && cp -a /tmp/src/. /mnt/server/\nfi\necho \"-----------------------------------------------\"\necho \"Installed. Fill in the Startup variables (Discord token, role and channel IDs, EULA), then start the server.\"\necho \"The first start downloads Java, Paper and the plugins by itself.\"\n",
+      "container": "ghcr.io/pterodactyl/installers:alpine",
+      "entrypoint": "ash"
+    }
+  },
+  "variables": [
+    {
+      "name": "Discord bot token",
+      "description": "Bot token from the Discord Developer Portal (Message Content + Server Members intents enabled).",
+      "env_variable": "DISCORD_TOKEN",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|max:200",
+      "field_type": "text"
+    },
+    {
+      "name": "OP role ID",
+      "description": "Discord role that may stop/restart the server and use the commands.",
+      "env_variable": "OP_ROLE_ID",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|regex:/^[0-9]{15,21}$/",
+      "field_type": "text"
+    },
+    {
+      "name": "Panel channel ID",
+      "description": "Channel for the start/stop panel.",
+      "env_variable": "PANEL_CHANNEL_ID",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|regex:/^[0-9]{15,21}$/",
+      "field_type": "text"
+    },
+    {
+      "name": "Cross-chat channel ID",
+      "description": "Minecraft <-> Discord chat (DiscordSRV).",
+      "env_variable": "CROSSCHAT_CHANNEL_ID",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|regex:/^[0-9]{15,21}$/",
+      "field_type": "text"
+    },
+    {
+      "name": "Console channel ID",
+      "description": "Live server console (OP role can type commands).",
+      "env_variable": "CONSOLE_CHANNEL_ID",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|regex:/^[0-9]{15,21}$/",
+      "field_type": "text"
+    },
+    {
+      "name": "Configure channel ID",
+      "description": "Where the slash commands may be used.",
+      "env_variable": "CONFIGURE_CHANNEL_ID",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|regex:/^[0-9]{15,21}$/",
+      "field_type": "text"
+    },
+    {
+      "name": "Accept Minecraft EULA",
+      "description": "Set to true to accept https://aka.ms/MinecraftEULA",
+      "env_variable": "EULA",
+      "default_value": "false",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|in:true,false",
+      "field_type": "text"
+    },
+    {
+      "name": "Minecraft version",
+      "description": "Paper version, or 'latest' (resolved once). Raising it later backs up the world and upgrades; it never downgrades by itself.",
+      "env_variable": "MC_VERSION",
+      "default_value": "latest",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|max:20",
+      "field_type": "text"
+    },
+    {
+      "name": "Plugins",
+      "description": "'recommended' (Geyser, Floodgate, ViaVersion, ViaBackwards, ViaRewind, SkinsRestorer, spark), 'none', or a comma list of Modrinth slugs. DiscordSRV is always installed.",
+      "env_variable": "PLUGIN_PRESET",
+      "default_value": "recommended",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|max:200",
+      "field_type": "text"
+    },
+    {
+      "name": "Server name (MOTD)",
+      "description": "Shown in the server list. &a = colours, \\n = second line.",
+      "env_variable": "MOTD",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|max:120",
+      "field_type": "text"
+    },
+    {
+      "name": "Max players",
+      "description": "Leave empty to keep the current value.",
+      "env_variable": "MAX_PLAYERS",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|integer|between:1,1000",
+      "field_type": "text"
+    },
+    {
+      "name": "Auto-shutdown minutes",
+      "description": "Stop Minecraft after this many minutes with NO players (0 = off). Only stops when the server confirms zero players.",
+      "env_variable": "AUTOSHUT_MINUTES",
+      "default_value": "3",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|integer|between:0,240",
+      "field_type": "text"
+    },
+    {
+      "name": "Auto-start on join",
+      "description": "Start Minecraft when someone tries to join while it is offline (Java + Bedrock). Needs the port free while offline, so leave it false if you start Minecraft some other way.",
+      "env_variable": "AUTOSTART_ON_JOIN",
+      "default_value": "false",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|in:true,false",
+      "field_type": "text"
+    },
+    {
+      "name": "Slash commands",
+      "description": "full = everything, minimal = help/server/players/autoshut/autostart, off = none. The panel, console and cross-chat always work.",
+      "env_variable": "COMMANDS",
+      "default_value": "full",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|in:full,minimal,off",
+      "field_type": "text"
+    },
+    {
+      "name": "RAM override (MB)",
+      "description": "Leave empty: the Java heap is sized from this server's memory limit automatically.",
+      "env_variable": "RAM_MB",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|integer|min:512",
+      "field_type": "text"
+    },
+    {
+      "name": "Repository URL",
+      "description": "Git repository with the bot (used by the installer).",
+      "env_variable": "REPO_URL",
+      "default_value": "https://github.com/YOUR-NAME/minecraft-panel-bot.git",
+      "user_viewable": true,
+      "user_editable": false,
+      "rules": "required|string|max:300",
+      "field_type": "text"
+    },
+    {
+      "name": "Repository branch",
+      "description": "Branch to install.",
+      "env_variable": "REPO_BRANCH",
+      "default_value": "main",
+      "user_viewable": true,
+      "user_editable": false,
+      "rules": "required|string|max:60",
+      "field_type": "text"
+    },
+    {
+      "name": "Auto-update code",
+      "description": "1 = git pull the bot code on every start (config, world and plugins are never touched).",
+      "env_variable": "AUTO_UPDATE",
+      "default_value": "0",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|in:0,1",
+      "field_type": "text"
+    }
+  ]
+}
